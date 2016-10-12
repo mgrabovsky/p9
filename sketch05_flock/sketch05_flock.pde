@@ -1,23 +1,125 @@
-boolean looping = true;
-
-class Boid {
-    float x, y, dir;
-
-    Boid(float x, float y, float dir) {
-        this.x = x;
-        this.y = y;
-        this.dir = dir;
-    }
-}
+import java.util.Calendar;
 
 int boidCount = 150;
+float boidSpeed = 0.5;
+float flockRadius = 80;
+float personalSpaceRadius = 15;
+float bunchingFactor = 0.008;
+float repulsionFactor = 0.020;
+float headingFactor = 0.01;
+boolean allowBunching = true;
+boolean avoidCrashing = true;
+
+int debugId = 0;
+boolean looping = true;
 Boid[] boids;
 PShape arrowhead;
 
+class Boid {
+    float x, y, heading;
+
+    Boid(float x, float y, float heading) {
+        this.x = x;
+        this.y = y;
+        this.heading = heading;
+    }
+
+    void draw() {
+        arrowhead.rotate(heading);
+        //arrowhead.setFill(angleToColor(heading));
+        arrowhead.setFill(color(30));
+        arrowhead.scale(1.2);
+        shape(arrowhead, x, y);
+        arrowhead.resetMatrix();
+    }
+}
+
+void randomizeHeadings() {
+    for (int i = 0; i < boidCount; ++i) {
+        boids[i].heading = random(TWO_PI);
+    }
+}
+
+color angleToColor(float angle) {
+    return color(100 * angle / TWO_PI, 65, 75);
+}
+
+void step() {
+    for (int i = 0; i < boidCount; ++i) {
+        float x = boids[i].x,
+              y = boids[i].y,
+              heading = boids[i].heading;
+
+        int friendCount = 0;
+        float[] friendsCentroid = { 0, 0 };
+        float[] avgDirection = { 0, 0 };
+        float angleDelta = 0;
+
+        for (int j = 0; j < boidCount; ++j) {
+            if (i == j) continue;
+
+            float d = dist(x, y, boids[j].x, boids[j].y);
+            // Count friends in flock and compute their centroid and average heading
+            if (d <= flockRadius) {
+                ++friendCount;
+                friendsCentroid[0] += boids[j].x;
+                friendsCentroid[1] += boids[j].y;
+                avgDirection[0] += cos(boids[j].heading);
+                avgDirection[1] += sin(boids[j].heading);
+            }
+
+            // Avoid boids that are too close
+            if (avoidCrashing && d <= personalSpaceRadius) {
+                float r = norm(d, 0, personalSpaceRadius);
+                float alpha = atan2(boids[j].y - y, boids[j].x - x);
+                angleDelta += (1 - r) * (PI - alpha) * repulsionFactor;
+            }
+        }
+
+        if (friendCount > 0) {
+            friendsCentroid[0] /= friendCount;
+            friendsCentroid[1] /= friendCount;
+
+            // Move closer to friends
+            if (allowBunching) {
+                float d = norm(dist(x, y, friendsCentroid[0], friendsCentroid[1]),
+                                0, flockRadius);
+                if (d > 0) {
+                    float alpha = atan2(friendsCentroid[1] - y,
+                                        friendsCentroid[0] - x);
+                    angleDelta += (1 - d) * (alpha - heading) * bunchingFactor;
+                }
+            }
+
+            // Rotate the boid closer to the average direction
+            float avgHeading = atan2(avgDirection[1], avgDirection[0]);
+            angleDelta += (avgHeading - heading) * headingFactor;
+
+            boids[i].heading = (heading + angleDelta + TWO_PI) % TWO_PI;
+        }
+
+        // Move the boid a step in the direction of its flight
+        x += boidSpeed * cos(heading);
+        y += boidSpeed * sin(heading);
+
+        // Toroidal topology
+        if (x < 0 || x > width) {
+            x = width - x;
+        }
+        if (y < 0 || y > height) {
+            y = height - y;
+        }
+
+        boids[i].x = x;
+        boids[i].y = y;
+    }
+}
+
 void setup() {
-    size(900, 600);
+    //size(1000, 600);
+    fullScreen();
     //frameRate(20);
-    colorMode(HSB, 360, 100, 100);
+    colorMode(HSB, 100, 100, 100);
 
     boids = new Boid[boidCount];
 
@@ -36,109 +138,47 @@ void setup() {
     arrowhead.setFill(color(0));
 }
 
-void randomizeDirs() {
-    for (int i = 0; i < boidCount; ++i) {
-        boids[i].dir = random(TWO_PI);
-    }
-}
-
-void drawArrow(Boid b, color col) {
-    arrowhead.rotate(b.dir);
-    arrowhead.setFill(col);
-    shape(arrowhead, b.x, b.y);
-    arrowhead.resetMatrix();
-}
-
 void draw() {
-    background(320);
+    background(90);
     noStroke();
 
+    noFill();
+    stroke(80);
+    ellipse(boids[debugId].x, boids[debugId].y, 2*flockRadius, 2*flockRadius);
+    stroke(60);
+    ellipse(boids[debugId].x, boids[debugId].y, 2*personalSpaceRadius, 2*personalSpaceRadius);
+
     for (int i = 0; i < boidCount; ++i) {
-        drawArrow(boids[i], color(360 * boids[i].dir / TWO_PI, 60, 70));
+        boids[i].draw();
     }
 
     step();
 }
 
-void step() {
-    // Calculate average boid direction in the flock
-    float[] avgAngle = { 0, 0 };
-    float avgDir = 0;
-
-    for (int i = 0; i < boidCount; ++i) {
-        float d = boids[i].dir;
-        avgAngle[0] += cos(d);
-        avgAngle[1] += sin(d);
-    }
-
-    avgDir = atan2(avgAngle[1], avgAngle[0]);
-
-    for (int i = 0; i < boidCount; ++i) {
-        int friendCount = 0;
-        float[] friendsCentroid = { 0, 0 };
-
-        // Move the boid in the direction of its flight
-        boids[i].x += 0.5 * cos(boids[i].dir);
-        boids[i].y += 0.5 * sin(boids[i].dir);
-
-        // Toroidal topology
-        if (boids[i].x < 0 || boids[i].x > width) {
-            boids[i].x = width - boids[i].x;
-        }
-        if (boids[i].y < 0 || boids[i].y > height) {
-            boids[i].y = height - boids[i].y;
-        }
-
-        // Avoid boids that are too close
-        for (int j = 0; j < boidCount; ++j) {
-            if (i == j) continue;
-
-            float d = dist(boids[i].x, boids[i].y, boids[j].x, boids[j].y);
-            // Count friends and compute their centroid
-            if (d <= 200) {
-                ++friendCount;
-                friendsCentroid[0] += boids[j].x;
-                friendsCentroid[1] += boids[j].y;
-            }
-
-            // Avoid boids that are to close
-            if (d <= 30) {
-                float r = sq(1 - norm(d, 0, 30));
-                float alpha = atan2(boids[j].y - boids[i].y, boids[j].x - boids[i].x);
-                boids[i].dir += TWO_PI + r * (PI - alpha) * 0.05;
-                boids[i].dir %= TWO_PI;
-            }
-        }
-
-        // Move closer to friends
-        if (friendCount > 0) {
-            friendsCentroid[0] /= friendCount;
-            friendsCentroid[1] /= friendCount;
-
-            float d = norm(dist(boids[i].x, boids[i].y, friendsCentroid[0], friendsCentroid[1]), 0, 200);
-            if (d > 0) {
-                float alpha = atan2(friendsCentroid[1] - boids[i].y, friendsCentroid[0] - boids[i].x);
-                boids[i].dir += TWO_PI + alpha * 0.01;
-                boids[i].dir %= TWO_PI;
-            }
-        }
-
-        // Rotate the boid closer to the average direction
-        boids[i].dir += (avgDir - boids[i].dir) * 0.01;
-    }
-}
-
 void keyPressed() {
     if (key == 'r') {
-        randomizeDirs();
+        randomizeHeadings();
+    } else if (key == '1') {
+        allowBunching = !allowBunching;
+    } else if (key == '2') {
+        avoidCrashing = !avoidCrashing;
+    } else if (key == 'n') {
+        debugId = (debugId + 1) % boidCount;
+    } else if (key == 'p') {
+        debugId = (debugId + boidCount - 1) % boidCount;
     } else if (key == 's') {
-        saveFrame("frame-####.png");
+        saveFrame(timestamp()+"_##.png");
     } else if (key == ' ') {
         if (looping) noLoop(); else loop();
         looping = !looping;
     } else if (key == 'q') {
         exit();
     }
+}
+
+String timestamp() {
+    Calendar now = Calendar.getInstance();
+    return String.format("%1$ty%1$tm%1$td_%1$tH%1$tM%1$tS", now);
 }
 
 /* vim: set et sw=4 sts=4 ai cin: */
