@@ -2,7 +2,7 @@ import java.util.Calendar;
 
 int boidCount = 100;
 float boidSpeed = 0.5;
-float flockRadius = 80;
+float flockRadius = 120;
 float personalSpaceRadius = 15;
 float bunchingFactor = 0.008;
 float repulsionFactor = 0.020;
