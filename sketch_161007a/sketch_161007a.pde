@@ -9,7 +9,8 @@ boolean looping = true;
 //color[] colors = { #472d30, #723d46, #e26d5c, #ffe1a8, #c9cba3 };
 //color[] colors = { #1d3557, #457b9d, #a8dadc, #f1faee, #e63946 };
 //color[] colors = { #6d6465, #86c1ba, #9ae9ef, #f23f0e, #ff6528 };
-color[] colors = { #0d1321, #1d2d44, #3e5c76, #748cab, #f0ebd8 };
+//color[] colors = { #0d1321, #1d2d44, #3e5c76, #748cab, #f0ebd8 };
+color[] colors = { #254e70, #37718e, #8ee3ef, #aef3e7, #c33c54 };
 float unit = 36;
 
 float ux = unit / sqrt(3);
