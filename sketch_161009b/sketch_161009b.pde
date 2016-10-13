@@ -1,7 +1,9 @@
+import java.util.Calendar;
+
 float padding    = 40;
-float gridStep   = 30;
-float hairLength = 20;
-float senseRadius = 60;
+float gridStep   = 20;
+float hairLength = 15;
+float senseRadius = 40;
 
 int rows, cols;
 float[][] angles;
@@ -66,15 +68,26 @@ void draw() {
     }
   }
 
+  /*
   fill(120);
   textSize(12);
   text(String.format("%.1f FPS", frameRate), padding, height - 12);
+  */
 }
 
 void keyPressed() {
   if (key == 'r') {
     resetAngles();
-  } else if (key == 'q') {
-    exit();
-  }
+    } else if (key == 's') {
+        saveFrame(timestamp()+"_##.png");
+    } else if (key == 'q') {
+        exit();
+    }
 }
+
+String timestamp() {
+    Calendar now = Calendar.getInstance();
+    return String.format("%1$ty%1$tm%1$td_%1$tH%1$tM%1$tS", now);
+}
+
+/* vim: set et sw=4 sts=4 ai cin: */
