@@ -1,6 +1,6 @@
 import java.util.Calendar;
 
-int boidCount = 150;
+int boidCount = 100;
 float boidSpeed = 0.5;
 float flockRadius = 80;
 float personalSpaceRadius = 15;
@@ -12,6 +12,7 @@ boolean avoidCrashing = true;
 
 int debugId = 0;
 boolean looping = true;
+boolean movieCapture = false;
 Boid[] boids;
 PShape arrowhead;
 
@@ -26,8 +27,7 @@ class Boid {
 
     void draw() {
         arrowhead.rotate(heading);
-        //arrowhead.setFill(angleToColor(heading));
-        arrowhead.setFill(color(30));
+        arrowhead.setFill(angleToColor(heading));
         arrowhead.scale(1.2);
         shape(arrowhead, x, y);
         arrowhead.resetMatrix();
@@ -41,7 +41,7 @@ void randomizeHeadings() {
 }
 
 color angleToColor(float angle) {
-    return color(100 * angle / TWO_PI, 65, 75);
+    return color(100 * angle / TWO_PI, 55, 80);
 }
 
 void step() {
@@ -72,7 +72,7 @@ void step() {
             if (avoidCrashing && d <= personalSpaceRadius) {
                 float r = norm(d, 0, personalSpaceRadius);
                 float alpha = atan2(boids[j].y - y, boids[j].x - x);
-                angleDelta += (1 - r) * (PI - alpha) * repulsionFactor;
+                angleDelta += (1 - r) * (heading - alpha) * repulsionFactor;
             }
         }
 
@@ -116,8 +116,8 @@ void step() {
 }
 
 void setup() {
-    //size(1000, 600);
-    fullScreen();
+    size(800, 600);
+    //fullScreen();
     //frameRate(20);
     colorMode(HSB, 100, 100, 100);
 
@@ -139,7 +139,7 @@ void setup() {
 }
 
 void draw() {
-    background(90);
+    background(95);
     noStroke();
 
     noFill();
@@ -153,6 +153,10 @@ void draw() {
     }
 
     step();
+
+    if (movieCapture) {
+      saveFrame("frames/flock-####.png");
+    }
 }
 
 void keyPressed() {
@@ -168,6 +172,8 @@ void keyPressed() {
         debugId = (debugId + boidCount - 1) % boidCount;
     } else if (key == 's') {
         saveFrame(timestamp()+"_##.png");
+    } else if (key == 'm') {
+      movieCapture = !movieCapture;
     } else if (key == ' ') {
         if (looping) noLoop(); else loop();
         looping = !looping;
