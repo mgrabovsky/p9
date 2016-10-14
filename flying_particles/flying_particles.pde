@@ -3,7 +3,7 @@ ArrayList<Point> points = new ArrayList<Point>();
 
 // Redraw background with slight transparency -- fades old lines
 void layBg() {
-    fill(40, 20);
+    fill(40, 15);
     noStroke();
     blendMode(DARKEST);
     rect(0, 0, width, height);
@@ -11,16 +11,17 @@ void layBg() {
 }
 
 void setup() {
-    size(600, 600);
+    //size(600, 600);
+    fullScreen();
 
     background(40);
 
     for (float x = 40; x <= width - 40; x += 26) {
         for (float y = 40; y <= height - 40; y += 26) {
-            if (random(10) > 2) continue;
+            if (random(10) > 1) continue;
 
-            float dir = round(random(0,8)) * QUARTER_PI;
-            points.add(new Point(x, y, random(2, 5), 1.0, dir));
+            float dir = round(random(0, 8)) * QUARTER_PI;
+            points.add(new Point(x, y, random(2, 8), 1.0, dir));
         }
     }
 }
