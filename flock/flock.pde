@@ -1,8 +1,8 @@
 import java.util.Calendar;
 
-int boidCount = 100;
+int boidCount = 200;
 float boidSpeed = 0.5;
-float flockRadius = 120;
+float flockRadius = 100;
 float personalSpaceRadius = 15;
 float bunchingFactor = 0.008;
 float repulsionFactor = 0.020;
@@ -117,8 +117,8 @@ void step() {
 }
 
 void setup() {
-    size(800, 600);
-    //fullScreen();
+    //size(800, 600);
+    fullScreen();
     //frameRate(20);
     colorMode(HSB, 100, 100, 100);
 

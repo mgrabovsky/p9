@@ -4,7 +4,6 @@ float h;
 
 void setup() {
   size(600, 600);
-  //frameRate(20);
   colorMode(HSB, 360, 100, 100);
   background(60);
 
@@ -33,16 +32,6 @@ void draw() {
 
   x += dx;
   y += dy;
-
-  noFill();
-  strokeWeight(12);
-  stroke(360);
-  triangle(width / 2 - 100, height / 2 + 80,
-           width / 2 + 100, height / 2 + 80,
-           width / 2,       height / 2 - 90);
-  triangle(width / 2 - 100, height / 2 - 40,
-           width / 2 + 100, height / 2 - 40,
-           width / 2,       height / 2 + 130);
 }
 
 void keyPressed() {
@@ -50,6 +39,6 @@ void keyPressed() {
     if (looping) noLoop(); else loop();
     looping = !looping;
   } else if (key == 's') {
-    saveFrame("sframe-####.png");
+    saveFrame("frame-####.png");
   }
 }
