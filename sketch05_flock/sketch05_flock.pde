@@ -10,6 +10,7 @@ float headingFactor = 0.01;
 boolean allowBunching = true;
 boolean avoidCrashing = true;
 
+boolean debugMode = false;
 int debugId = 0;
 boolean looping = true;
 boolean movieCapture = false;
@@ -142,11 +143,14 @@ void draw() {
     background(95);
     noStroke();
 
-    noFill();
-    stroke(80);
-    ellipse(boids[debugId].x, boids[debugId].y, 2*flockRadius, 2*flockRadius);
-    stroke(60);
-    ellipse(boids[debugId].x, boids[debugId].y, 2*personalSpaceRadius, 2*personalSpaceRadius);
+    if (debugMode) {
+        noFill();
+        stroke(80);
+        ellipse(boids[debugId].x, boids[debugId].y, 2*flockRadius, 2*flockRadius);
+        stroke(60);
+        ellipse(boids[debugId].x, boids[debugId].y,
+                2*personalSpaceRadius, 2*personalSpaceRadius);
+    }
 
     for (int i = 0; i < boidCount; ++i) {
         boids[i].draw();
@@ -170,6 +174,8 @@ void keyPressed() {
         debugId = (debugId + 1) % boidCount;
     } else if (key == 'p') {
         debugId = (debugId + boidCount - 1) % boidCount;
+    } else if (key == 'd') {
+        debugMode = !debugMode;
     } else if (key == 's') {
         saveFrame(timestamp()+"_##.png");
     } else if (key == 'm') {
