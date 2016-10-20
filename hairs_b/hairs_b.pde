@@ -54,14 +54,19 @@ void draw() {
       if (d < senseRadius) {
         angles[i][j] = alpha;
       } else {
-        // FIXME: Weird behaviour when to the right of mouse
-        angles[i][j] -= 0.02 * (angles[i][j] - alpha);
+        float dangle = angles[i][j] - alpha;
+        if (dangle > PI) {
+            dangle = TWO_PI - dangle;
+        } else if (dangle < -PI) {
+            dangle = TWO_PI + dangle;
+        }
+        angles[i][j] -= 0.02 * dangle;
+        angles[i][j] %= TWO_PI;
       }
 
       if (d < hairLength) {
         line(x, y, x + d * cos(angles[i][j]), y + d * sin(angles[i][j]));
       } else {
-        // FIXME: Weird behaviour when to the right of mouse
         line(x, y, x + hairLength * cos(angles[i][j]),
               y + hairLength * sin(angles[i][j]));
       }
@@ -76,8 +81,8 @@ void draw() {
 }
 
 void keyPressed() {
-  if (key == 'r') {
-    resetAngles();
+    if (key == 'r') {
+        resetAngles();
     } else if (key == 's') {
         saveFrame(timestamp()+"_##.png");
     } else if (key == 'q') {
