@@ -1,6 +1,7 @@
-float mutationRate = 0.1;
-float fontSize = 14;
-int tailSize = 25;
+float mutationRate = 0.05;
+float fontSize = 12;
+int tailSize = 30;
+float columnSpacing = 8;
 
 PFont font;
 int columnCount, columnHeight;
@@ -11,10 +12,12 @@ class Column {
   ArrayList letters;
   int bottomPos;
   float size;
+  color col;
 
-  Column(int count, int startPos) {
+  Column(int count, int startPos, color initialColor) {
     assert(startPos < count);
     bottomPos = startPos;
+    col = initialColor;
 
     letters = new ArrayList(count);
 
@@ -31,11 +34,28 @@ class Column {
     }
   }
 
+  private void reset() {
+    float oldHue = hue(col),
+          dhue = random(-10, 10);
+
+    if (dhue + oldHue > 255 || dhue + oldHue < 0) {
+      dhue *= 1;
+    }
+
+    colorMode(HSB);
+    col = color(oldHue + dhue, saturation(col), brightness(col));
+    colorMode(RGB);
+
+    bottomPos = 0;
+  }
+
   void step() {
     bottomPos += 1;
-    bottomPos %= letters.size();
-
-    mutate();
+    if (bottomPos == letters.size()) {
+      reset();
+    } else {
+      mutate();
+    }
   }
 
   void draw() {
@@ -44,12 +64,13 @@ class Column {
         continue;
       }
 
-      if (bottomPos - i >= tailSize - 12) {
-        float n = noise(i);
-        float x = n * norm(bottomPos - i, tailSize - 12, tailSize);
-        fill(lerpColor(#14b43c, #000000, x));
+      if (bottomPos - i >= tailSize - 8) {
+        float x = norm(bottomPos - i, tailSize - 8, tailSize);
+        fill(lerpColor(col, #000000, x));
+      } else if (bottomPos - i > 5) {
+        fill(lerpColor(col, #000000, 0.3 * noise(i)));
       } else {
-        fill(lerpColor(#efefef, #14b43c, (float)(bottomPos - i) / 5));
+        fill(lerpColor(#efefef, col, (float)(bottomPos - i) / 5));
       }
 
       text((char)letters.get(i), 0, i * fontSize);
@@ -58,7 +79,8 @@ class Column {
 }
 
 char randomChar() {
-  int c = int(random(0x21, 0x0300));
+  //int c = int(random(0x21, 0x3f00));
+  int c = int(random(0x3000, 0x3500));
 
   if (c >= 0x7f && c <= 0xa0) {
     c += 0x22;
@@ -68,29 +90,31 @@ char randomChar() {
 }
 
 void setup() {
-  //size(900, 900);
-  fullScreen();
+  size(900, 600);
+  //fullScreen();
   frameRate(20);
 
-  font = createFont("Courier New Bold", fontSize);
+  //font = createFont("Courier New Bold", fontSize);
+  font = createFont("Code2000", fontSize);
   textFont(font, fontSize);
 
-  columnCount  = int(width / fontSize);
+  columnCount  = int(width / (fontSize + columnSpacing));
   columnHeight = int(height / fontSize + tailSize);
 
   cols = new Column[columnCount];
   for (int i = 0; i < columnCount; ++i) {
-    cols[i] = new Column(columnHeight, int(random(columnHeight)));
+    cols[i] = new Column(columnHeight, int(random(columnHeight)), #14b43c);
   }
 }
 
 void draw() {
   background(0);
 
+  translate(columnSpacing, 0);
   for (Column col : cols) {
-    translate(fontSize, 0);
     col.draw();
     col.step();
+    translate(fontSize + columnSpacing, 0);
   }
 }
 
@@ -104,3 +128,5 @@ void keyPressed() {
     exit();
   }
 }
+
+/* vim: set et sw=2 cindent: */
