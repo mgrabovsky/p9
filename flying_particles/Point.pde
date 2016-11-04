@@ -1,14 +1,16 @@
 class Point {
     float x, y, size;
     float v, dir;
+    color col;
 
-    Point(float x0, float y0, float size, float speed, float direction) {
+    Point(float x0, float y0, float size, float speed, float direction, color col) {
         x = x0;
         y = y0;
 
         this.size = size;
         v = speed;
         dir = direction;
+        this.col = col;
     }
 
     void tick() {
@@ -29,6 +31,7 @@ class Point {
     }
 
     void draw() {
+        stroke(col);
         strokeWeight(size);
         point(x, y);
     }
