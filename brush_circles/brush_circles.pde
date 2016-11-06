@@ -1,11 +1,11 @@
 float spread = 20;
 int opacity = 50;
+boolean connect = false;
 
 boolean drawing = false;
 
 void setup() {
   size(800, 800);
-  frameRate(30);
 
   colorMode(HSB, 100, 100, 100, 100);
   background(98);
@@ -15,10 +15,16 @@ void draw() {
   if (drawing) {
     float angle = atan2(mouseX - pmouseX, mouseY - pmouseY);
     float ds = dist(mouseX, mouseY, pmouseX, pmouseY);
-  
+
+    if (connect) {
+      strokeWeight(1);
+      stroke(0, 10);
+      line(pmouseX, pmouseY, mouseX, mouseY);
+    }
+
     strokeWeight(map(ds, 0, 100, 1, 20));
     stroke(color(map(angle, -PI, PI, 0, 100), 50, 85), opacity);
-  
+
     for (int i = 0; i < 5; ++i) {
       point(mouseX + random(-spread, spread),
             mouseY + random(-spread, spread));
@@ -37,6 +43,8 @@ void keyPressed() {
     opacity = min(opacity + 5, 100);
   } else if (key == '-') {
     opacity = max(opacity - 5, 0);
+  } else if (key == '*') {
+    connect = !connect;
   } else if (key == 's') {
     saveFrame("frame-####.png");
   } else if (key == 'c') {
