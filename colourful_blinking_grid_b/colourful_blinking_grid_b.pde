@@ -1,5 +1,7 @@
 boolean looping = true;
 
+float time = 0;
+
 void circle(float x, float y, float r) {
   ellipse(x, y, r, r);
 }
@@ -16,21 +18,30 @@ void setup() {
   clearBg();
   noStroke();
 
-  frameRate(10);
+  frameRate(30);
 }
 
 void draw() {
   clearBg();
 
   float hueBase = 360 * mouseX / width;
-  float sizeVar = 18 * mouseY / height;
+  float sizeVar = 80 * mouseY / height;
 
-  for (int x = 20; x < width; x += 20) {
-    for (int y = 20; y < height; y += 20) {
-      fill((hueBase + random(150)) % 360, 50 + random(60), 70 + random(10)); 
-      circle(x, y, 2 + random(sizeVar));
+  for (int x = 40; x <= width - 40; x += 40) {
+    for (int y = 40; y <= height - 40; y += 40) {
+      fill((hueBase + 120 * noise(time, x/40, y/40)) % 360,
+            50 + 40 * noise(time, x/40, y/40),
+            70 + 20 * noise(time, x/40, y/40),
+            120);
+      circle(x, y, 4 + sizeVar * noise(time + x / 20, y));
     }
   }
+
+  fill(0, 80);
+  noStroke();
+  ellipse(mouseX, mouseY, 20, 20);
+
+  time += 0.01;
 }
 
 void keyPressed() {
