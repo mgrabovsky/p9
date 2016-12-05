@@ -35,11 +35,11 @@ class Node {
             break;
         }
 
+        strokeWeight(nodeSize * 0.2);
         if (_active) {
-            strokeWeight(3);
-            stroke(60);
+            stroke(120);
         } else {
-            noStroke();
+            stroke(40);
         }
 
         ellipse(_x, _y, nodeSize, nodeSize);
@@ -60,11 +60,12 @@ ArrayList<Edge> edges = new ArrayList<Edge>();
 Node draggedNode = null;
 
 void setup() {
-    size(900, 900);
+    //size(900, 900);
+    fullScreen();
 }
 
 void draw() {
-    background(230);
+    background(40);
 
     drawEdges();
     drawNodes();
@@ -72,7 +73,7 @@ void draw() {
 
 void drawEdges() {
     strokeWeight(2);
-    stroke(0, 40);
+    stroke(255, 20);
 
     for (Edge edge : edges) {
         line(edge._from._x, edge._from._y, edge._to._x, edge._to._y);
