@@ -5,7 +5,7 @@ import processing.pdf.*;
 // Tweak these and see what happens
 
 // -- Structure
-int maxNodes      = 500;
+int maxNodes      = 200;
 float hoodDensity = 0.6;
 float hoodRadius  = 150;
 
@@ -30,24 +30,26 @@ float animationScale = 0.5;
 
 /* `~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~ */
 
-boolean editing = true;
+boolean editing        = true;
 boolean recordingMovie = false;
-boolean recordingPDF = false;
-int nodeCount = 0;
-Node[] nodes = new Node[maxNodes];
+boolean recordingPDF   = false;
+
+int nodeCount     = 0;
+Node[] nodes      = new Node[maxNodes];
 boolean[][] edges = new boolean[maxNodes][maxNodes];
+
 Node draggedNode = null; // Used when moving nodes by hand
-Node sourceNode = null; // Used when creating new edges by hand
-Node targetNode = null; // _ditto_
+Node sourceNode  = null; // Used when creating new edges by hand
+Node targetNode  = null; // _ditto_
 
 enum State { NONE, SUSCEPTIBLE, INFECTIOUS, RECOVERED }
 
 class Node {
     int _id;
     float _x, _y;
-    private State _state, _nextState;
     float _tween;
     boolean _highlight;
+    private State _state, _nextState;
 
     Node(int id, float x, float y) {
         _id = id;
@@ -60,9 +62,9 @@ class Node {
         _highlight = false;
     }
 
-    boolean isSusceptible() { return _state == State.SUSCEPTIBLE; }
-    boolean isInfectious()  { return _state == State.INFECTIOUS; }
-    boolean isRecovered()   { return _state == State.RECOVERED; }
+    boolean susceptible() { return _state == State.SUSCEPTIBLE; }
+    boolean infectious()  { return _state == State.INFECTIOUS; }
+    boolean recovered()   { return _state == State.RECOVERED; }
 
     void draw() {
         if (_nextState != State.NONE) {
@@ -73,13 +75,13 @@ class Node {
         color currentColor;
 
         switch (_state) {
-        default:
+        case SUSCEPTIBLE:
             currentColor = susceptibleColor;
             break;
         case INFECTIOUS:
             currentColor = infectiousColor;
             break;
-        case RECOVERED:
+        default:
             currentColor = recoveredColor;
             break;
         }
@@ -114,7 +116,7 @@ class Node {
         ellipse(_x, _y, d, d);
     }
 
-    State nextState() {
+    private void nextState() {
         switch (_state) {
         case SUSCEPTIBLE:
             _state = State.INFECTIOUS;
@@ -123,16 +125,14 @@ class Node {
             _state = State.RECOVERED;
             break;
         default:
-            return _state;
+            return;
         }
 
         _tween = 1.0;
-
-        return _state;
     }
 
     void infect() {
-        if (!isSusceptible() || _nextState != State.NONE) {
+        if (!susceptible() || _nextState != State.NONE) {
             return;
         }
 
@@ -140,7 +140,7 @@ class Node {
     }
 
     void recover() {
-        if (!isInfectious() || _nextState != State.NONE) {
+        if (!infectious() || _nextState != State.NONE) {
             return;
         }
 
@@ -259,7 +259,7 @@ void drawEdges() {
                 continue;
             }
 
-            if (nodes[i].isRecovered() || nodes[j].isRecovered()) {
+            if (nodes[i].recovered() || nodes[j].recovered()) {
                 stroke(passiveEdgeColor);
             } else {
                 stroke(activeEdgeColor);
@@ -342,9 +342,9 @@ Node findNode(float x, float y) {
 
 void simulateStep() {
     for (int i = 0; i < nodeCount; ++i) {
-        if (nodes[i].isInfectious()) {
+        if (nodes[i].infectious()) {
             for (Node neigh : nodes[i].neighbors()) {
-                if (neigh.isSusceptible() && random(1) < infectionRate) {
+                if (neigh.susceptible() && random(1) < infectionRate) {
                     neigh.infect();
                 }
             }
@@ -364,9 +364,9 @@ int[] countStates() {
     int[] counts = { 0, 0, 0 };
 
     for (int i = 0; i < nodeCount; ++i) {
-        if (nodes[i].isSusceptible()) {
+        if (nodes[i].susceptible()) {
             ++counts[0];
-        } else if (nodes[i].isInfectious()) {
+        } else if (nodes[i].infectious()) {
             ++counts[1];
         } else {
             ++counts[2];
@@ -497,7 +497,7 @@ void keyPressed() {
         }
     } else if (editing && key == 'I') {
         for (int i = 0; i < nodeCount; ++i) {
-            if (!nodes[i].isInfectious() && random(1) < infectionRate) {
+            if (!nodes[i].infectious() && random(1) < infectionRate) {
                 nodes[i].infect();
             }
         }
