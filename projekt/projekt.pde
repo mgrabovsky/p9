@@ -1,57 +1,86 @@
 import java.util.Calendar;
+import java.util.Locale;
+import processing.pdf.*;
 
-/* Tweak these and see what happens */
+// Tweak these and see what happens
 
-/* ** Behaviour */
-int maxNodes = 300;
-float nodeSize = 20;
-float hoodDensity = 0.3;
-float animationSpeed = 0.04;
-float animationScale = 0.5;
-float hoodRadius = 100;
+// -- Structure
+int maxNodes      = 500;
+float hoodDensity = 0.6;
+float hoodRadius  = 150;
 
-/* ** Visuals */
-color backgroundColor = color(30);
+// -- Behavior
+float infectionRate = 0.005;
+float recoveryRate  = 0.008;
+
+// -- Appearance
+float nodeSize   = 20;
 float edgeWeight = 2;
-color activeEdgeColor = color(255, 50);
+
+color backgroundColor  = color(30);
+color activeEdgeColor  = color(255, 50);
 color passiveEdgeColor = color(255, 20);
-color newEdgeColor = color(255, 90);
+color newEdgeColor     = color(255, 90);
 color susceptibleColor = #61e8cd;
-color infectiousColor = #e8635c;
-color recoveredColor = #555659;
+color infectiousColor  = #e8635c;
+color recoveredColor   = color(50);
+
+float animationSpeed = 0.06;
+float animationScale = 0.5;
 
 /* `~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~ */
 
-enum State { SUSCEPTIBLE, INFECTIOUS, RECOVERED }
+boolean editing = true;
+boolean recordingMovie = false;
+boolean recordingPDF = false;
+int nodeCount = 0;
+Node[] nodes = new Node[maxNodes];
+boolean[][] edges = new boolean[maxNodes][maxNodes];
+Node draggedNode = null; // Used when moving nodes by hand
+Node sourceNode = null; // Used when creating new edges by hand
+Node targetNode = null; // _ditto_
+
+enum State { NONE, SUSCEPTIBLE, INFECTIOUS, RECOVERED }
 
 class Node {
     int _id;
     float _x, _y;
-    boolean _highlight;
-    State _state;
+    private State _state, _nextState;
     float _tween;
+    boolean _highlight;
 
     Node(int id, float x, float y) {
         _id = id;
-        _x = x;
-        _y = y;
+        _x  = x;
+        _y  = y;
+
+        _state     = State.SUSCEPTIBLE;
+        _nextState = State.NONE;
+        _tween     = 0;
         _highlight = false;
-        _state = State.SUSCEPTIBLE;
-        _tween = 0;
     }
 
+    boolean isSusceptible() { return _state == State.SUSCEPTIBLE; }
+    boolean isInfectious()  { return _state == State.INFECTIOUS; }
+    boolean isRecovered()   { return _state == State.RECOVERED; }
+
     void draw() {
-        color stateColor;
+        if (_nextState != State.NONE) {
+            nextState();
+            _nextState = State.NONE;
+        }
+
+        color currentColor;
 
         switch (_state) {
         default:
-            stateColor = susceptibleColor;
+            currentColor = susceptibleColor;
             break;
         case INFECTIOUS:
-            stateColor = infectiousColor;
+            currentColor = infectiousColor;
             break;
         case RECOVERED:
-            stateColor = recoveredColor;
+            currentColor = recoveredColor;
             break;
         }
 
@@ -76,12 +105,12 @@ class Node {
                 prevColor = infectiousColor;
             }
 
-            stateColor = lerpColor(stateColor, prevColor, _tween);
+            currentColor = lerpColor(currentColor, prevColor, _tween);
 
             _tween -= animationSpeed;
         }
 
-        fill(stateColor);
+        fill(currentColor);
         ellipse(_x, _y, d, d);
     }
 
@@ -102,12 +131,40 @@ class Node {
         return _state;
     }
 
-    float distance(float x, float y) {
+    void infect() {
+        if (!isSusceptible() || _nextState != State.NONE) {
+            return;
+        }
+
+        _nextState = State.INFECTIOUS;
+    }
+
+    void recover() {
+        if (!isInfectious() || _nextState != State.NONE) {
+            return;
+        }
+
+        _nextState = State.RECOVERED;
+    }
+
+    float distTo(float x, float y) {
         return dist(_x, _y, x, y);
     }
 
-    float distance(Node node) {
-        return distance(node._x, node._y);
+    float distTo(Node node) {
+        return distTo(node._x, node._y);
+    }
+
+    ArrayList<Node> neighbors() {
+        ArrayList<Node> result = new ArrayList<Node>();
+
+        for (int i = 0; i < nodeCount; ++i) {
+            if (i != _id && edges[i][_id]) {
+                result.add(nodes[i]);
+            }
+        }
+
+        return result;
     }
 
     void isolate() {
@@ -123,43 +180,54 @@ class Node {
     }
 }
 
-boolean editing = true;
-int nodeCount = 0;
-Node[] nodes = new Node[maxNodes];
-boolean[][] edges = new boolean[maxNodes][maxNodes];
-Node draggedNode = null; // Used when moving nodes by hand
-Node sourceNode = null; // Used when creating new edges by hand
-Node targetNode = null; // _ditto_
-
 void setup() {
     //size(900, 900);
     fullScreen();
 }
 
 void draw() {
+    if (recordingPDF) {
+        beginRecord(PDF, timestamp() + "_##.pdf");
+    }
+
     background(backgroundColor);
 
     if (editing) {
         drawUI();
-    }
 
-    if (mousePressed) {
-        if (sourceNode != null) {
-            strokeWeight(edgeWeight + 2);
-            stroke(newEdgeColor);
+        if (mousePressed) {
+            if (sourceNode != null) {
+                strokeWeight(edgeWeight + 2);
+                stroke(newEdgeColor);
 
-            if (targetNode == null) {
-                line(sourceNode._x, sourceNode._y, mouseX, mouseY);
-            } else if (targetNode._id != sourceNode._id) {
-                targetNode._highlight = true;
-                line(sourceNode._x, sourceNode._y, targetNode._x, targetNode._y);
+                if (targetNode == null) {
+                    line(sourceNode._x, sourceNode._y, mouseX, mouseY);
+                } else if (targetNode._id != sourceNode._id) {
+                    targetNode._highlight = true;
+                    line(sourceNode._x, sourceNode._y, targetNode._x, targetNode._y);
+                }
             }
         }
+    } else {
+        simulateStep();
     }
 
     drawEdges();
     drawNodes();
+
+    if (recordingPDF) {
+        endRecord();
+        recordingPDF = false;
+    }
+
+    if (recordingMovie) {
+        saveFrame("movie/frame-####.png");
+    }
 }
+
+/* ==============================================================================
+ * Interface drawing
+ */
 
 void drawUI() {
     noStroke();
@@ -167,13 +235,18 @@ void drawUI() {
     rect(width/2 - 250, .2 * height, 200, .6 * height);
     rect(width/2 + 50,  .2 * height, 200, .6 * height);
 
-    int[] stateCounts = countStates();
+    int[] counts = countStates();
+    float[] freqs = { (float)counts[0] / nodeCount,
+                      (float)counts[1] / nodeCount,
+                      (float)counts[2] / nodeCount };
 
     fill(120);
     textSize(14);
     textLeading(16);
-    text(String.format("node count: %d\nsusceptible: %d\ninfected: %d\nresitant: %d",
-            nodeCount, stateCounts[0], stateCounts[1], stateCounts[2]),
+    text(String.format(Locale.ENGLISH, "density: %.0f%%\nradius: %.0f\ninfection rate: %.1f%%\nrecovery rate: %.1f%%\n\n" +
+                "node count: %d/%d\nsusceptible: %.0f%%\ninfected: %.0f%%\nrecovered: %.0f%%\n\n%d FPS",
+            100 * hoodDensity, hoodRadius, 100 * infectionRate, 100 * recoveryRate,
+            nodeCount, maxNodes, 100 * freqs[0], 100 * freqs[1], 100 * freqs[2], int(frameRate)),
         30, 50);
 }
 
@@ -186,7 +259,7 @@ void drawEdges() {
                 continue;
             }
 
-            if (nodes[i]._state == State.RECOVERED || nodes[j]._state == State.RECOVERED) {
+            if (nodes[i].isRecovered() || nodes[j].isRecovered()) {
                 stroke(passiveEdgeColor);
             } else {
                 stroke(activeEdgeColor);
@@ -206,6 +279,10 @@ void drawNodes() {
     }
 }
 
+/* ==============================================================================
+ * Graph manipulation
+ */
+
 Node createRandomNodeAt(float x, float y) {
     if (nodeCount >= maxNodes) {
         return null;
@@ -215,7 +292,7 @@ Node createRandomNodeAt(float x, float y) {
     nodes[nodeCount] = newNode;
 
     for (int i = 0; i < nodeCount; ++i) {
-        float d = newNode.distance(nodes[i]);
+        float d = newNode.distTo(nodes[i]);
 
         if (d < hoodRadius && random(1) < hoodDensity) {
             addEdge(i, nodeCount);
@@ -243,15 +320,15 @@ void clearGraph() {
 
 Node findNode(float x, float y) {
     Node nearest = null;
-    float distance = 0;
+    float minDist = 0;
 
     for (int i = 0; i < nodeCount; ++i) {
         Node n = nodes[i];
         float d = dist(n._x, n._y, x, y);
-        if (d <= 1.5 * nodeSize) {
-            if (nearest == null || d < distance) {
+        if (d <= 1.2 * nodeSize) {
+            if (nearest == null || d < minDist) {
                 nearest = n;
-                distance = d;
+                minDist = d;
             }
         }
     }
@@ -259,20 +336,40 @@ Node findNode(float x, float y) {
     return nearest;
 }
 
+/* ==============================================================================
+ * Simulation
+ */
+
+void simulateStep() {
+    for (int i = 0; i < nodeCount; ++i) {
+        if (nodes[i].isInfectious()) {
+            for (Node neigh : nodes[i].neighbors()) {
+                if (neigh.isSusceptible() && random(1) < infectionRate) {
+                    neigh.infect();
+                }
+            }
+
+            if (random(1) < recoveryRate) {
+                nodes[i].recover();
+            }
+        }
+    }
+}
+
+/* ==============================================================================
+ * Miscellaneous
+ */
+
 int[] countStates() {
     int[] counts = { 0, 0, 0 };
 
     for (int i = 0; i < nodeCount; ++i) {
-        switch (nodes[i]._state) {
-        case SUSCEPTIBLE:
+        if (nodes[i].isSusceptible()) {
             ++counts[0];
-            break;
-        case INFECTIOUS:
+        } else if (nodes[i].isInfectious()) {
             ++counts[1];
-            break;
-        case RECOVERED:
+        } else {
             ++counts[2];
-            break;
         }
     }
 
@@ -312,16 +409,21 @@ void mouseDragged() {
 
     switch (mouseButton) {
     case LEFT:
-        if (draggedNode != null) {
-            draggedNode._highlight = true;
-            draggedNode._x = mouseX;
-            draggedNode._y = mouseY;
-        } else if (sourceNode != null) {
-            sourceNode._highlight = true;
-            targetNode = findNode(mouseX, mouseY);
+        if (keyPressed && key == CODED && keyCode == CONTROL) {
+            createRandomNodeAt(mouseX + random(-hoodRadius / 2, hoodRadius / 2),
+                               mouseY + random(-hoodRadius / 2, hoodRadius / 2));
         } else {
-            draggedNode = findNode(mouseX, mouseY);
-            if (draggedNode == null) break;
+            if (draggedNode != null) {
+                draggedNode._highlight = true;
+                draggedNode._x = mouseX;
+                draggedNode._y = mouseY;
+            } else if (sourceNode != null) {
+                sourceNode._highlight = true;
+                targetNode = findNode(mouseX, mouseY);
+            } else {
+                draggedNode = findNode(mouseX, mouseY);
+                if (draggedNode == null) break;
+            }
         }
         break;
     }
@@ -351,14 +453,14 @@ void mouseClicked() {
         if (n == null) {
             break;
         }
-        n.isolate();
+        n.reset();
         break; }
     case CENTER: {
         Node n = findNode(mouseX, mouseY);
         if (n == null) {
             break;
         }
-        n.reset();
+        n.isolate();
         break; }
     }
 }
@@ -384,14 +486,37 @@ void keyPressed() {
         clearGraph();
     } else if (editing && key == 'g') {
         createRandomNodeAt(random(width), random(height));
-    } else if (editing && key == 'r') {
-        for (int i = nodeCount; i < maxNodes; ++i) {
+    } else if (editing && key == 'G') {
+        clearGraph();
+        for (int i = 0; i < maxNodes; ++i) {
             createRandomNodeAt(random(width), random(height));
+        }
+    } else if (editing && key == 'r') {
+        for (int i = 0; i < nodeCount; ++i) {
+            nodes[i].reset();
+        }
+    } else if (editing && key == 'I') {
+        for (int i = 0; i < nodeCount; ++i) {
+            if (!nodes[i].isInfectious() && random(1) < infectionRate) {
+                nodes[i].infect();
+            }
         }
     } else if (key == ' ') {
         if (draggedNode == null && sourceNode == null) {
             editing = !editing;
         }
+    } else if (key == '[') {
+        infectionRate = max(infectionRate - 0.001, 0.0);
+    } else if (key == ']') {
+        infectionRate = min(infectionRate + 0.001, 1.0);
+    } else if (key == '{') {
+        recoveryRate = max(recoveryRate - 0.001, 0.0);
+    } else if (key == '}') {
+        recoveryRate = min(recoveryRate + 0.001, 1.0);
+    } else if (key == 'm') {
+        recordingMovie = !recordingMovie;
+    } else if (key == 'p') {
+        recordingPDF = true;
     } else if (key == 's') {
         saveFrame(timestamp() + "_##.png");
     }
