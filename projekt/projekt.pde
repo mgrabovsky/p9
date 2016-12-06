@@ -1,63 +1,135 @@
 import java.util.Calendar;
 
-float nodeSize = 20;
+/* Tweak these and see what happens */
 
-enum State { IMMUNE, SUSCEPTIBLE, EXPOSED, INFECTIVE, RECOVERED }
+/* ** Behaviour */
+int maxNodes = 300;
+float nodeSize = 20;
+float hoodDensity = 0.3;
+float animationSpeed = 0.04;
+float animationScale = 0.5;
+float hoodRadius = 100;
+
+/* ** Visuals */
+color backgroundColor = color(30);
+float edgeWeight = 2;
+color activeEdgeColor = color(255, 50);
+color passiveEdgeColor = color(255, 20);
+color newEdgeColor = color(255, 90);
+color susceptibleColor = #61e8cd;
+color infectiousColor = #e8635c;
+color recoveredColor = #555659;
+
+/* `~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~^~._,~`~._,~ */
+
+enum State { SUSCEPTIBLE, INFECTIOUS, RECOVERED }
 
 class Node {
+    int _id;
     float _x, _y;
-    boolean _active;
+    boolean _highlight;
     State _state;
+    float _tween;
 
-    Node(float x, float y) {
+    Node(int id, float x, float y) {
+        _id = id;
         _x = x;
         _y = y;
-        _active = false;
-        _state = State.IMMUNE;
+        _highlight = false;
+        _state = State.SUSCEPTIBLE;
+        _tween = 0;
     }
 
     void draw() {
+        color stateColor;
+
         switch (_state) {
-        case IMMUNE:
-            fill(#7da1db);
+        default:
+            stateColor = susceptibleColor;
             break;
-        case SUSCEPTIBLE:
-            fill(#74ccba);
-            break;
-        case EXPOSED:
-            fill(#d6c77e);
-            break;
-        case INFECTIVE:
-            fill(#db9481);
+        case INFECTIOUS:
+            stateColor = infectiousColor;
             break;
         case RECOVERED:
-            fill(#abb8ce);
+            stateColor = recoveredColor;
             break;
         }
 
         strokeWeight(nodeSize * 0.2);
-        if (_active) {
-            stroke(120);
+        if (_highlight) {
+            stroke(100);
         } else {
-            stroke(40);
+            stroke(backgroundColor);
         }
 
-        ellipse(_x, _y, nodeSize, nodeSize);
+        float d = nodeSize;
+
+        if (_tween > 0) {
+            color prevColor = susceptibleColor;
+
+            if (_state == State.INFECTIOUS) {
+                prevColor = susceptibleColor;
+
+                float scaleFactor = 1.0 + animationScale * sq(sin(_tween * PI));
+                d *= scaleFactor;
+            } else if (_state == State.RECOVERED) {
+                prevColor = infectiousColor;
+            }
+
+            stateColor = lerpColor(stateColor, prevColor, _tween);
+
+            _tween -= animationSpeed;
+        }
+
+        fill(stateColor);
+        ellipse(_x, _y, d, d);
+    }
+
+    State nextState() {
+        switch (_state) {
+        case SUSCEPTIBLE:
+            _state = State.INFECTIOUS;
+            break;
+        case INFECTIOUS:
+            _state = State.RECOVERED;
+            break;
+        default:
+            return _state;
+        }
+
+        _tween = 1.0;
+
+        return _state;
+    }
+
+    float distance(float x, float y) {
+        return dist(_x, _y, x, y);
+    }
+
+    float distance(Node node) {
+        return distance(node._x, node._y);
+    }
+
+    void isolate() {
+        for (int j = 0; j < nodeCount; ++j) {
+            removeEdge(_id, j);
+        }
+    }
+
+    void reset() {
+        _state = State.SUSCEPTIBLE;
+        _tween = 0;
+        _highlight = false;
     }
 }
 
-class Edge {
-    Node _from, _to;
-
-    Edge(Node from, Node to) {
-        _from = from;
-        _to   = to;
-    }
-}
-
-ArrayList<Node> nodes = new ArrayList<Node>();
-ArrayList<Edge> edges = new ArrayList<Edge>();
-Node draggedNode = null;
+boolean editing = true;
+int nodeCount = 0;
+Node[] nodes = new Node[maxNodes];
+boolean[][] edges = new boolean[maxNodes][maxNodes];
+Node draggedNode = null; // Used when moving nodes by hand
+Node sourceNode = null; // Used when creating new edges by hand
+Node targetNode = null; // _ditto_
 
 void setup() {
     //size(900, 900);
@@ -65,120 +137,116 @@ void setup() {
 }
 
 void draw() {
-    background(40);
+    background(backgroundColor);
+
+    if (editing) {
+        drawUI();
+    }
+
+    if (mousePressed) {
+        if (sourceNode != null) {
+            strokeWeight(edgeWeight + 2);
+            stroke(newEdgeColor);
+
+            if (targetNode == null) {
+                line(sourceNode._x, sourceNode._y, mouseX, mouseY);
+            } else if (targetNode._id != sourceNode._id) {
+                targetNode._highlight = true;
+                line(sourceNode._x, sourceNode._y, targetNode._x, targetNode._y);
+            }
+        }
+    }
 
     drawEdges();
     drawNodes();
 }
 
-void drawEdges() {
-    strokeWeight(2);
-    stroke(255, 20);
+void drawUI() {
+    noStroke();
+    fill(50);
+    rect(width/2 - 250, .2 * height, 200, .6 * height);
+    rect(width/2 + 50,  .2 * height, 200, .6 * height);
 
-    for (Edge edge : edges) {
-        line(edge._from._x, edge._from._y, edge._to._x, edge._to._y);
+    int[] stateCounts = countStates();
+
+    fill(120);
+    textSize(14);
+    textLeading(16);
+    text(String.format("node count: %d\nsusceptible: %d\ninfected: %d\nresitant: %d",
+            nodeCount, stateCounts[0], stateCounts[1], stateCounts[2]),
+        30, 50);
+}
+
+void drawEdges() {
+    strokeWeight(edgeWeight);
+
+    for (int i = 0; i < nodeCount; ++i) {
+        for (int j = i + 1; j < nodeCount; ++j) {
+            if (!edges[i][j]) {
+                continue;
+            }
+
+            if (nodes[i]._state == State.RECOVERED || nodes[j]._state == State.RECOVERED) {
+                stroke(passiveEdgeColor);
+            } else {
+                stroke(activeEdgeColor);
+            }
+
+            line(nodes[i]._x, nodes[i]._y, nodes[j]._x, nodes[j]._y);
+        }
     }
 }
 
 void drawNodes() {
-    stroke(40);
+    stroke(backgroundColor);
     strokeWeight(2);
 
-    for (Node node : nodes) {
-        node.draw();
+    for (int i = 0; i < nodeCount; ++i) {
+        nodes[i].draw();
     }
 }
 
-void mouseReleased() {
-    switch (mouseButton) {
-    case LEFT:
-        if (draggedNode != null) {
-            draggedNode._active = false;
-            draggedNode = null;
-        }
-        break;
+Node createRandomNodeAt(float x, float y) {
+    if (nodeCount >= maxNodes) {
+        return null;
     }
-}
 
-void mouseDragged() {
-    switch (mouseButton) {
-    case LEFT:
-        if (draggedNode == null) {
-            draggedNode = findNode(mouseX, mouseY);
-            if (draggedNode == null) break;
-        }
+    Node newNode = new Node(nodeCount, x, y);
+    nodes[nodeCount] = newNode;
 
-        draggedNode._active = true;
-        draggedNode._x = mouseX;
-        draggedNode._y = mouseY;
-        break;
-    }
-}
+    for (int i = 0; i < nodeCount; ++i) {
+        float d = newNode.distance(nodes[i]);
 
-void mouseClicked() {
-    switch (mouseButton) {
-    case LEFT:
-        createNodeAt(mouseX, mouseY);
-        break;
-    case RIGHT: {
-        Node n = findNode(mouseX, mouseY);
-        if (n == null) break;
-        removeNode(n);
-        break; }
-    case CENTER: {
-        Node n = findNode(mouseX, mouseY);
-        if (n == null) break;
-        switch (n._state) {
-        case IMMUNE:
-            n._state = State.SUSCEPTIBLE;
-            break;
-        case SUSCEPTIBLE:
-            n._state = State.EXPOSED;
-            break;
-        case EXPOSED:
-            n._state = State.INFECTIVE;
-            break;
-        case INFECTIVE:
-            n._state = State.RECOVERED;
-            break;
-        case RECOVERED:
-            n._state = State.SUSCEPTIBLE;
-            break;
-        }
-        break; }
-    }
-}
-
-Node createNodeAt(float x, float y) {
-    Node newNode = new Node(mouseX, mouseY);
-    nodes.add(newNode);
-    for (Node neigh : nodes) {
-        if (neigh != newNode && random(10) > 6) {
-            edges.add(new Edge(newNode, neigh));
+        if (d < hoodRadius && random(1) < hoodDensity) {
+            addEdge(i, nodeCount);
         }
     }
+
+    ++nodeCount;
 
     return newNode;
 }
 
-void removeNode(Node node) {
-    nodes.remove(node);
+void addEdge(int i, int j) {
+    edges[i][j] = edges[j][i] = true;
+}
 
-    ArrayList<Edge> found = new ArrayList<Edge>();
-    for (Edge edge : edges) {
-        if (edge._from == node || edge._to == node) {
-            found.add(edge);
-        }
-    }
+void removeEdge(int i, int j) {
+    edges[i][j] = edges[j][i] = false;
+}
 
-    edges.removeAll(found);
+void clearGraph() {
+    nodeCount = 0;
+    nodes = new Node[maxNodes];
+    edges = new boolean[maxNodes][maxNodes];
 }
 
 Node findNode(float x, float y) {
     Node nearest = null;
     float distance = 0;
 
-    for (Node n : nodes) {
+    for (int i = 0; i < nodeCount; ++i) {
+        Node n = nodes[i];
         float d = dist(n._x, n._y, x, y);
         if (d <= 1.5 * nodeSize) {
             if (nearest == null || d < distance) {
@@ -191,10 +259,139 @@ Node findNode(float x, float y) {
     return nearest;
 }
 
+int[] countStates() {
+    int[] counts = { 0, 0, 0 };
+
+    for (int i = 0; i < nodeCount; ++i) {
+        switch (nodes[i]._state) {
+        case SUSCEPTIBLE:
+            ++counts[0];
+            break;
+        case INFECTIOUS:
+            ++counts[1];
+            break;
+        case RECOVERED:
+            ++counts[2];
+            break;
+        }
+    }
+
+    return counts;
+}
+
+/* ==============================================================================
+ * Input handling
+ */
+
+void mouseReleased() {
+    if (!editing) {
+        return;
+    }
+
+    switch (mouseButton) {
+    case LEFT:
+        if (draggedNode != null) {
+            draggedNode._highlight = false;
+            draggedNode = null;
+        } else if (sourceNode != null) {
+            sourceNode._highlight = false;
+            if (targetNode != null && targetNode != sourceNode) {
+                addEdge(sourceNode._id, targetNode._id);
+                targetNode._highlight = false;
+            }
+            sourceNode = targetNode = null;
+        }
+        break;
+    }
+}
+
+void mouseDragged() {
+    if (!editing) {
+        return;
+    }
+
+    switch (mouseButton) {
+    case LEFT:
+        if (draggedNode != null) {
+            draggedNode._highlight = true;
+            draggedNode._x = mouseX;
+            draggedNode._y = mouseY;
+        } else if (sourceNode != null) {
+            sourceNode._highlight = true;
+            targetNode = findNode(mouseX, mouseY);
+        } else {
+            draggedNode = findNode(mouseX, mouseY);
+            if (draggedNode == null) break;
+        }
+        break;
+    }
+}
+
+void mouseClicked() {
+    if (!editing) {
+        return;
+    }
+
+    switch (mouseButton) {
+    case LEFT: {
+        if (sourceNode != null) {
+            break;
+        }
+
+        Node n = findNode(mouseX, mouseY);
+
+        if (n == null) {
+            createRandomNodeAt(mouseX, mouseY);
+        } else {
+            n.nextState();
+        }
+        break; }
+    case RIGHT: {
+        Node n = findNode(mouseX, mouseY);
+        if (n == null) {
+            break;
+        }
+        n.isolate();
+        break; }
+    case CENTER: {
+        Node n = findNode(mouseX, mouseY);
+        if (n == null) {
+            break;
+        }
+        n.reset();
+        break; }
+    }
+}
+
+void mousePressed() {
+    if (!editing) {
+        return;
+    }
+
+    switch (mouseButton) {
+    case LEFT: {
+        Node n = findNode(mouseX, mouseY);
+
+        if (keyPressed && key == CODED && keyCode == SHIFT) {
+            sourceNode = n;
+        }
+        break; }
+    }
+}
+
 void keyPressed() {
-    if (key == 'c') {
-        nodes.clear();
-        edges.clear();
+    if (editing && key == 'c') {
+        clearGraph();
+    } else if (editing && key == 'g') {
+        createRandomNodeAt(random(width), random(height));
+    } else if (editing && key == 'r') {
+        for (int i = nodeCount; i < maxNodes; ++i) {
+            createRandomNodeAt(random(width), random(height));
+        }
+    } else if (key == ' ') {
+        if (draggedNode == null && sourceNode == null) {
+            editing = !editing;
+        }
     } else if (key == 's') {
         saveFrame(timestamp() + "_##.png");
     }
