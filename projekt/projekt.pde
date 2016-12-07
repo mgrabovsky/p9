@@ -34,9 +34,7 @@ boolean editing        = true;
 boolean recordingMovie = false;
 boolean recordingPDF   = false;
 
-int nodeCount     = 0;
-Node[] nodes      = new Node[maxNodes];
-boolean[][] edges = new boolean[maxNodes][maxNodes];
+Graph graph;
 
 Node draggedNode = null; // Used when moving nodes by hand
 Node sourceNode  = null; // Used when creating new edges by hand
@@ -44,17 +42,162 @@ Node targetNode  = null; // _ditto_
 
 enum State { NONE, SUSCEPTIBLE, INFECTIOUS, RECOVERED }
 
+class Graph {
+    private int         _nodeCount;
+    private Node[]      _nodes;
+    private boolean[][] _edges;
+
+    Graph() {
+        clear();
+    }
+
+    int size() {
+        return _nodeCount;
+    }
+
+    Node getNode(int i) {
+        if (i < 0 || i >= _nodeCount) {
+            return null;
+        }
+
+        return _nodes[i];
+    }
+
+    Node addNode(float x, float y) {
+        if (_nodeCount >= maxNodes) {
+            return null;
+        }
+
+        Node node = _nodes[_nodeCount] = new Node(_nodeCount, this, x, y);
+
+        ++_nodeCount;
+
+        return node;
+    }
+
+    boolean hasEdge(int i, int  j) {
+        if (i < 0 || i >= _nodeCount || j < 0 || j >= _nodeCount || i == j) {
+            return false;
+        }
+
+        return _edges[i][j];
+    }
+
+    void addEdge(int i, int j) {
+        if (i < 0 || i >= _nodeCount || j < 0 || j >= _nodeCount || i == j) {
+            return;
+        }
+
+        _edges[i][j] = _edges[j][i] = true;
+    }
+
+    void removeEdge(int i, int j) {
+        if (i < 0 || i >= _nodeCount || j < 0 || j >= _nodeCount || i == j) {
+            return;
+        }
+
+        _edges[i][j] = _edges[j][i] = false;
+    }
+
+    void addHoodEdges(int i) {
+        if (i < 0 || i >= _nodeCount) {
+            return;
+        }
+
+        addHoodEdges(_nodes[i]);
+    }
+
+    void addHoodEdges(Node node) {
+        for (int i = 0; i < _nodeCount; ++i) {
+            if (i == node._id) {
+                continue;
+            }
+
+            float d = node.distTo(_nodes[i]);
+            if (d < hoodRadius && random(1) < hoodDensity) {
+                addEdge(i, node._id);
+            }
+        }
+    }
+
+    void clear() {
+        _nodeCount = 0;
+        _nodes     = new Node[maxNodes];
+        _edges     = new boolean[maxNodes][maxNodes];
+    }
+
+    void resetNodes() {
+        for (int i = 0; i < _nodeCount; ++i) {
+            _nodes[i].reset();
+        }
+    }
+
+    Node nodeAt(float x, float y) {
+        Node nearest = null;
+        float minDist = 0;
+
+        for (int i = 0; i < _nodeCount; ++i) {
+            float d = dist(_nodes[i]._x, _nodes[i]._y, x, y);
+
+            if (d <= 1.2 * nodeSize) {
+                if (nearest == null || d < minDist) {
+                    nearest = _nodes[i];
+                    minDist = d;
+                }
+            }
+        }
+
+        return nearest;
+    }
+
+    void draw() {
+        drawEdges();
+        drawNodes();
+    }
+
+    private void drawEdges() {
+        strokeWeight(edgeWeight);
+
+        for (int i = 0; i < _nodeCount; ++i) {
+            for (int j = i + 1; j < _nodeCount; ++j) {
+                if (!_edges[i][j]) {
+                    continue;
+                }
+
+                if (_nodes[i].recovered() || _nodes[j].recovered()) {
+                    stroke(passiveEdgeColor);
+                } else {
+                    stroke(activeEdgeColor);
+                }
+
+                line(_nodes[i]._x, _nodes[i]._y, _nodes[j]._x, _nodes[j]._y);
+            }
+        }
+    }
+
+    private void drawNodes() {
+        stroke(backgroundColor);
+        strokeWeight(2);
+
+        for (int i = 0; i < _nodeCount; ++i) {
+            _nodes[i].draw();
+        }
+    }
+}
+
 class Node {
-    int _id;
-    float _x, _y;
-    float _tween;
-    boolean _highlight;
+    int           _id;
+    private Graph _parent;
+    float         _x, _y;
+    float         _tween;
+    boolean       _highlight;
     private State _state, _nextState;
 
-    Node(int id, float x, float y) {
-        _id = id;
-        _x  = x;
-        _y  = y;
+    Node(int id, Graph parent, float x, float y) {
+        _id     = id;
+        _parent = parent;
+        _x      = x;
+        _y      = y;
 
         _state     = State.SUSCEPTIBLE;
         _nextState = State.NONE;
@@ -158,9 +301,9 @@ class Node {
     ArrayList<Node> neighbors() {
         ArrayList<Node> result = new ArrayList<Node>();
 
-        for (int i = 0; i < nodeCount; ++i) {
-            if (i != _id && edges[i][_id]) {
-                result.add(nodes[i]);
+        for (int i = 0; i < _parent.size(); ++i) {
+            if (i != _id && _parent.hasEdge(i, _id)) {
+                result.add(_parent.getNode(i));
             }
         }
 
@@ -168,8 +311,8 @@ class Node {
     }
 
     void isolate() {
-        for (int j = 0; j < nodeCount; ++j) {
-            removeEdge(_id, j);
+        for (int j = 0; j < _parent.size(); ++j) {
+            _parent.removeEdge(_id, j);
         }
     }
 
@@ -183,6 +326,8 @@ class Node {
 void setup() {
     //size(900, 900);
     fullScreen();
+
+    graph = new Graph();
 }
 
 void draw() {
@@ -209,11 +354,10 @@ void draw() {
             }
         }
     } else {
-        simulateStep();
+        simulateStep(graph);
     }
 
-    drawEdges();
-    drawNodes();
+    graph.draw();
 
     if (recordingPDF) {
         endRecord();
@@ -235,10 +379,10 @@ void drawUI() {
     rect(width/2 - 250, .2 * height, 200, .6 * height);
     rect(width/2 + 50,  .2 * height, 200, .6 * height);
 
-    int[] counts = countStates();
-    float[] freqs = { (float)counts[0] / nodeCount,
-                      (float)counts[1] / nodeCount,
-                      (float)counts[2] / nodeCount };
+    int[] counts = countStates(graph);
+    float[] freqs = { (float)counts[0] / graph.size(),
+                      (float)counts[1] / graph.size(),
+                      (float)counts[2] / graph.size() };
 
     fill(120);
     textSize(14);
@@ -246,111 +390,27 @@ void drawUI() {
     text(String.format(Locale.ENGLISH, "density: %.0f%%\nradius: %.0f\ninfection rate: %.1f%%\nrecovery rate: %.1f%%\n\n" +
                 "node count: %d/%d\nsusceptible: %.0f%%\ninfected: %.0f%%\nrecovered: %.0f%%\n\n%d FPS",
             100 * hoodDensity, hoodRadius, 100 * infectionRate, 100 * recoveryRate,
-            nodeCount, maxNodes, 100 * freqs[0], 100 * freqs[1], 100 * freqs[2], int(frameRate)),
+            graph.size(), maxNodes, 100 * freqs[0], 100 * freqs[1], 100 * freqs[2], int(frameRate)),
         30, 50);
-}
-
-void drawEdges() {
-    strokeWeight(edgeWeight);
-
-    for (int i = 0; i < nodeCount; ++i) {
-        for (int j = i + 1; j < nodeCount; ++j) {
-            if (!edges[i][j]) {
-                continue;
-            }
-
-            if (nodes[i].recovered() || nodes[j].recovered()) {
-                stroke(passiveEdgeColor);
-            } else {
-                stroke(activeEdgeColor);
-            }
-
-            line(nodes[i]._x, nodes[i]._y, nodes[j]._x, nodes[j]._y);
-        }
-    }
-}
-
-void drawNodes() {
-    stroke(backgroundColor);
-    strokeWeight(2);
-
-    for (int i = 0; i < nodeCount; ++i) {
-        nodes[i].draw();
-    }
-}
-
-/* ==============================================================================
- * Graph manipulation
- */
-
-Node createRandomNodeAt(float x, float y) {
-    if (nodeCount >= maxNodes) {
-        return null;
-    }
-
-    Node newNode = new Node(nodeCount, x, y);
-    nodes[nodeCount] = newNode;
-
-    for (int i = 0; i < nodeCount; ++i) {
-        float d = newNode.distTo(nodes[i]);
-
-        if (d < hoodRadius && random(1) < hoodDensity) {
-            addEdge(i, nodeCount);
-        }
-    }
-
-    ++nodeCount;
-
-    return newNode;
-}
-
-void addEdge(int i, int j) {
-    edges[i][j] = edges[j][i] = true;
-}
-
-void removeEdge(int i, int j) {
-    edges[i][j] = edges[j][i] = false;
-}
-
-void clearGraph() {
-    nodeCount = 0;
-    nodes = new Node[maxNodes];
-    edges = new boolean[maxNodes][maxNodes];
-}
-
-Node findNode(float x, float y) {
-    Node nearest = null;
-    float minDist = 0;
-
-    for (int i = 0; i < nodeCount; ++i) {
-        Node n = nodes[i];
-        float d = dist(n._x, n._y, x, y);
-        if (d <= 1.2 * nodeSize) {
-            if (nearest == null || d < minDist) {
-                nearest = n;
-                minDist = d;
-            }
-        }
-    }
-
-    return nearest;
 }
 
 /* ==============================================================================
  * Simulation
  */
 
-void simulateStep() {
-    for (int i = 0; i < nodeCount; ++i) {
-        if (nodes[i].infectious()) {
-            for (Node neigh : nodes[i].neighbors()) {
+void simulateStep(Graph graph) {
+    for (int i = 0; i < graph.size(); ++i) {
+        Node node = graph.getNode(i);
+
+        if (node.infectious()) {
+            for (Node neigh : node.neighbors()) {
                 if (neigh.susceptible() && random(1) < infectionRate) {
                     neigh.infect();
                 }
             }
 
             if (random(1) < recoveryRate) {
-                nodes[i].recover();
+                node.recover();
             }
         }
     }
@@ -360,13 +420,13 @@ void simulateStep() {
  * Miscellaneous
  */
 
-int[] countStates() {
+int[] countStates(Graph graph) {
     int[] counts = { 0, 0, 0 };
 
-    for (int i = 0; i < nodeCount; ++i) {
-        if (nodes[i].susceptible()) {
+    for (int i = 0; i < graph.size(); ++i) {
+        if (graph.getNode(i).susceptible()) {
             ++counts[0];
-        } else if (nodes[i].infectious()) {
+        } else if (graph.getNode(i).infectious()) {
             ++counts[1];
         } else {
             ++counts[2];
@@ -393,7 +453,7 @@ void mouseReleased() {
         } else if (sourceNode != null) {
             sourceNode._highlight = false;
             if (targetNode != null && targetNode != sourceNode) {
-                addEdge(sourceNode._id, targetNode._id);
+                graph.addEdge(sourceNode._id, targetNode._id);
                 targetNode._highlight = false;
             }
             sourceNode = targetNode = null;
@@ -410,8 +470,9 @@ void mouseDragged() {
     switch (mouseButton) {
     case LEFT:
         if (keyPressed && key == CODED && keyCode == CONTROL) {
-            createRandomNodeAt(mouseX + random(-hoodRadius / 2, hoodRadius / 2),
-                               mouseY + random(-hoodRadius / 2, hoodRadius / 2));
+            Node n = graph.addNode(mouseX + random(-hoodRadius / 2, hoodRadius / 2),
+                                   mouseY + random(-hoodRadius / 2, hoodRadius / 2));
+            graph.addHoodEdges(n);
         } else {
             if (draggedNode != null) {
                 draggedNode._highlight = true;
@@ -419,9 +480,9 @@ void mouseDragged() {
                 draggedNode._y = mouseY;
             } else if (sourceNode != null) {
                 sourceNode._highlight = true;
-                targetNode = findNode(mouseX, mouseY);
+                targetNode = graph.nodeAt(mouseX, mouseY);
             } else {
-                draggedNode = findNode(mouseX, mouseY);
+                draggedNode = graph.nodeAt(mouseX, mouseY);
                 if (draggedNode == null) break;
             }
         }
@@ -440,23 +501,24 @@ void mouseClicked() {
             break;
         }
 
-        Node n = findNode(mouseX, mouseY);
+        Node n = graph.nodeAt(mouseX, mouseY);
 
         if (n == null) {
-            createRandomNodeAt(mouseX, mouseY);
+            Node newNode = graph.addNode(mouseX, mouseY);
+            graph.addHoodEdges(newNode);
         } else {
             n.nextState();
         }
         break; }
     case RIGHT: {
-        Node n = findNode(mouseX, mouseY);
+        Node n = graph.nodeAt(mouseX, mouseY);
         if (n == null) {
             break;
         }
         n.reset();
         break; }
     case CENTER: {
-        Node n = findNode(mouseX, mouseY);
+        Node n = graph.nodeAt(mouseX, mouseY);
         if (n == null) {
             break;
         }
@@ -472,7 +534,7 @@ void mousePressed() {
 
     switch (mouseButton) {
     case LEFT: {
-        Node n = findNode(mouseX, mouseY);
+        Node n = graph.nodeAt(mouseX, mouseY);
 
         if (keyPressed && key == CODED && keyCode == SHIFT) {
             sourceNode = n;
@@ -483,22 +545,22 @@ void mousePressed() {
 
 void keyPressed() {
     if (editing && key == 'c') {
-        clearGraph();
+        graph.clear();
     } else if (editing && key == 'g') {
-        createRandomNodeAt(random(width), random(height));
+        Node n = graph.addNode(random(width), random(height));
+        graph.addHoodEdges(n);
     } else if (editing && key == 'G') {
-        clearGraph();
+        graph.clear();
         for (int i = 0; i < maxNodes; ++i) {
-            createRandomNodeAt(random(width), random(height));
+            Node n = graph.addNode(random(width), random(height));
+            graph.addHoodEdges(n);
         }
     } else if (editing && key == 'r') {
-        for (int i = 0; i < nodeCount; ++i) {
-            nodes[i].reset();
-        }
+        graph.resetNodes();
     } else if (editing && key == 'I') {
-        for (int i = 0; i < nodeCount; ++i) {
-            if (!nodes[i].infectious() && random(1) < infectionRate) {
-                nodes[i].infect();
+        for (int i = 0; i < graph.size(); ++i) {
+            if (!graph.getNode(i).infectious() && random(1) < infectionRate) {
+                graph.getNode(i).infect();
             }
         }
     } else if (key == ' ') {
