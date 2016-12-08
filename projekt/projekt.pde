@@ -1,4 +1,5 @@
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.Locale;
 import processing.pdf.*;
 
@@ -42,7 +43,7 @@ Node targetNode  = null; // _ditto_
 
 enum State { NONE, SUSCEPTIBLE, INFECTIOUS, RECOVERED }
 
-class Graph {
+class Graph implements Iterable<Node> {
     private int         _nodeCount;
     private Node[]      _nodes;
     private boolean[][] _edges;
@@ -181,6 +182,30 @@ class Graph {
 
         for (int i = 0; i < _nodeCount; ++i) {
             _nodes[i].draw();
+        }
+    }
+
+    Iterator<Node> iterator() {
+        return new NodeIterator(0);
+    }
+
+    private final class NodeIterator implements Iterator<Node> {
+        private int _cursor;
+
+        public NodeIterator(int start) {
+            _cursor = start;
+        }
+
+        boolean hasNext() {
+            return _cursor < _nodeCount - 1;
+        }
+
+        public Node next() {
+            if (!hasNext()) {
+                return null;
+            }
+
+            return getNode(_cursor++);
         }
     }
 }
@@ -399,19 +424,19 @@ void drawUI() {
  */
 
 void simulateStep(Graph graph) {
-    for (int i = 0; i < graph.size(); ++i) {
-        Node node = graph.getNode(i);
+    for (Node node : graph) {
+        if (!node.infectious()) {
+            continue;
+        }
 
-        if (node.infectious()) {
-            for (Node neigh : node.neighbors()) {
-                if (neigh.susceptible() && random(1) < infectionRate) {
-                    neigh.infect();
-                }
+        for (Node neigh : node.neighbors()) {
+            if (neigh.susceptible() && random(1) < infectionRate) {
+                neigh.infect();
             }
+        }
 
-            if (random(1) < recoveryRate) {
-                node.recover();
-            }
+        if (random(1) < recoveryRate) {
+            node.recover();
         }
     }
 }
