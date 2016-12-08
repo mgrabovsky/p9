@@ -505,7 +505,11 @@ void mouseDragged() {
                 draggedNode._y = mouseY;
             } else if (sourceNode != null) {
                 sourceNode._highlight = true;
+                Node tn = targetNode;
                 targetNode = graph.nodeAt(mouseX, mouseY);
+                if (tn != null) {
+                    tn._highlight = false;
+                }
             } else {
                 draggedNode = graph.nodeAt(mouseX, mouseY);
                 if (draggedNode == null) break;
