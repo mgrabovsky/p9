@@ -580,9 +580,9 @@ void keyPressed() {
             Node n = graph.addNode(random(width), random(height));
             graph.addHoodEdges(n);
         }
-    } else if (editing && key == 'r') {
+    } else if (/*editing &&*/ key == 'r') {
         graph.resetNodes();
-    } else if (editing && key == 'I') {
+    } else if (/*editing &&*/ key == 'I') {
         for (int i = 0; i < graph.size(); ++i) {
             if (!graph.getNode(i).infectious() && random(1) < infectionRate) {
                 graph.getNode(i).infect();
