@@ -1,8 +1,8 @@
 import java.util.Calendar;
 
-float padding    = 40;
-float gridStep   = 20;
-float hairLength = 15;
+float padding     = 40;
+float gridStep    = 20;
+float hairLength  = 15;
 float senseRadius = 40;
 
 int rows, cols;
@@ -46,7 +46,6 @@ void draw() {
       float d = dist(x, y, mouseX, mouseY);   
 
       if (d == 0) {
-        point(x, y);
         continue;
       }
 
